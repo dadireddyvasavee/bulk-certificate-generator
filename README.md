@@ -1,8 +1,21 @@
-# Certify: Bulk Certificate Generator
+# Certify — Bulk Certificate Generator
 
-A working local-demo application with persistent jobs, recipient-level processing, personalized PDF certificates and downloadable archives. The frontend uses real API data; there are no sample dashboard metrics or simulated job completions.
+Certify is a web app for creating personalized certificates in batches. You can enter recipients manually or import them from a CSV file, submit a batch, follow its progress, and download the finished certificates as PDFs or as a ZIP file.
 
-## Features and scope
+I built this project to practise the full flow of a small web application: a React frontend, a FastAPI backend, background processing, database persistence, and PDF generation. The dashboard and job pages read from the API, so the status and counts shown in the UI come from stored data rather than hard-coded demo values.
+
+The simplest way to run it locally is with SQLite and the included polling worker. A Docker Compose setup for PostgreSQL, Redis, and Celery is also included, but that setup still needs to be tested in an environment with Docker available.
+
+## Where to start
+
+- [Windows PowerShell setup](#windows-powershell-setup)
+- [Docker Compose setup](#docker-compose-setup-provided-not-executed-in-this-environment)
+- [API request example](#example-request)
+- [Tests and verification evidence](VERIFICATION.md)
+- [Architecture and flow](#architecture-and-flow)
+- [Security and known limitations](#storage-security-and-operations)
+
+## What it can do
 
 - Dashboard with persisted aggregate metrics and recent jobs.
 - Guided batch form, manual rows, CSV upload/paste, sample CSV, editable import preview, field validation and confirmation dialog.
@@ -11,15 +24,15 @@ A working local-demo application with persistent jobs, recipient-level processin
 - One reusable landscape certificate design with embedded font, escaped text and long-text wrapping/shrinking.
 - Persistent acceptance, idempotency keys, isolated failures, bounded transient filesystem retries and stale-job recovery.
 - ZIP downloads contain successful PDFs only; terminal-job archives are cached on disk.
-- No login, email delivery, template editor or manual retry endpoint. This is not a production-secure multi-user system.
+- There is no login, email delivery, template editor, or manual retry endpoint yet. This project is intended for local demonstration and development, not as a production-ready multi-user service.
 
-## Stack
+## Tech stack
 
 React 19, strict TypeScript, Vite, Tailwind CSS 4, React Router, TanStack Query, React Hook Form, Zod, Lucide and Radix Dialog. Reusable accessible components are in `frontend/src/components/ui.tsx` rather than a full shadcn installation.
 
 Python 3.11+, FastAPI, Pydantic, SQLAlchemy 2, Alembic, PostgreSQL, Celery/Redis, ReportLab, Pytest/HTTPX. SQLite plus a separate polling worker is the tested service-free local alternative. Direct Python dependencies are pinned in requirements.txt; npm has a complete package-lock.json. Use Node 22.12+ or Node 24.
 
-## Architecture and flow
+## How it works
 
 1. The browser validates fields and requires correction of every invalid row before submitting one JSON batch.
 2. FastAPI validates job-level input and inserts the job and all recipient records in one transaction. It returns HTTP 201 without generating certificates.
@@ -30,9 +43,9 @@ Python 3.11+, FastAPI, Pydantic, SQLAlchemy 2, Alembic, PostgreSQL, Celery/Redis
 7. The browser polls active detail pages every two seconds and stops when terminal. Dashboard/history refresh every five seconds. Closing the browser does not interrupt processing.
 8. Downloads resolve only server-generated storage keys, check recipient status, parent job existence and file existence. Archives are generated on disk, not by loading every PDF into RAM.
 
-This design avoids long HTTP requests, isolates recipient failures, supports reconnecting clients and gives persisted progress. Celery late acknowledgement and lost-worker redelivery are enabled; duplicate deliveries are expected and guarded by leases and terminal-state checks.
+This keeps certificate generation out of the HTTP request, so submitting a batch does not have to wait for every PDF to finish. A failed recipient does not stop the rest of the batch, and progress remains available if the browser is refreshed. Celery late acknowledgement and redelivery are enabled; leases and terminal-state checks help handle duplicate task deliveries.
 
-### Recovery and boundaries
+### Background processing and recovery
 
 - Beat must run alongside Celery workers. Run only one Beat scheduler.
 - Queue outages leave durable jobs queued; they are published after recovery. `/ready` returns 503 when the database/schema or required Redis broker is unavailable. Acceptance itself depends on the database, not immediate queue delivery.
@@ -41,7 +54,7 @@ This design avoids long HTTP requests, isolates recipient failures, supports rec
 - Recovery is at-least-once, not a claim of distributed exactly-once execution. A process stalled beyond its lease may overlap a replacement worker; filesystem writes are not fully fenced. Stop a genuinely hung worker before recovering it. Production hardening should add a heartbeat/watchdog and storage fencing.
 - There is no manual retry-failed endpoint, so there is no misleading retry button. Correct invalid recipients and create a new batch. Successful records are never regenerated by ordinary task redelivery.
 
-## Important files
+## Project structure
 
 ```text
 backend/app/config.py        environment configuration
@@ -66,9 +79,50 @@ examples/batch.json          executable two-recipient request
 README.md, VERIFICATION.md, PLAN.md
 ```
 
-## Easiest service-free setup (verified here)
+## Run it locally
 
-Use three terminals. Commands below are POSIX shell commands. On Windows use equivalent environment variable assignments and venv activation.
+You will need three terminal windows: one for the API, one for the background worker, and one for the frontend. The Windows instructions are first because they are the easiest fit if you are using PowerShell.
+
+### Windows PowerShell setup
+
+**Terminal 1 — API** (from the project root):
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r backend/requirements.txt
+Set-Location backend
+$env:WORKER_MODE = "local"
+$env:DATABASE_URL = "sqlite:///./certificates.db"
+$env:STORAGE_DIR = "./storage"
+python -m alembic upgrade head
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+**Terminal 2 — worker** (open a new PowerShell window, then from the project root):
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+Set-Location backend
+$env:WORKER_MODE = "local"
+$env:DATABASE_URL = "sqlite:///./certificates.db"
+$env:STORAGE_DIR = "./storage"
+python -m app.worker
+```
+
+**Terminal 3 — frontend** (open a third PowerShell window, from the project root):
+
+```powershell
+Set-Location frontend
+npm ci
+npm run dev
+```
+
+Open `http://localhost:5173`. If the frontend cannot reach the API, create `frontend/.env.local` containing `VITE_API_URL=http://127.0.0.1:8000`, then restart the Vite dev server. API docs are at `http://127.0.0.1:8000/docs`. The virtual environment is created at the project root, so activate it from that root before changing into `backend`.
+
+### macOS / Linux
+
+If you are using macOS or Linux, use the commands below in three terminal windows.
 
 Terminal 1, from project root:
 
@@ -107,7 +161,7 @@ Open `http://localhost:5173`. API interactive OpenAPI documentation is at `http:
 
 The API does not automatically create tables: migrations are mandatory. The local worker uses the same processing function as Celery but polls durable database records directly, so Redis is not needed in this mode.
 
-## Docker Compose setup (provided, not executed in this environment)
+## Run with Docker Compose (included, but not yet verified here)
 
 ```bash
 cp .env.example .env
@@ -125,7 +179,7 @@ docker compose down
 
 Named volumes preserve database, broker data and certificates across `down`/`up`. **`docker compose down -v` permanently deletes those volumes.** No destructive controls are exposed in the UI.
 
-## Explicit PostgreSQL/Celery development workflow
+## Use PostgreSQL and Celery for development
 
 ```bash
 cp .env.example .env
@@ -152,7 +206,7 @@ python -m celery -A app.worker.celery beat --loglevel=info --schedule=/tmp/celer
 
 Start frontend with `cd frontend && npm ci && npm run dev`. Vite reads `frontend/.env.local` if you create it; set `VITE_API_URL` there for a non-default API. Backend configuration uses exported environment variables; it does not silently load `.env` files.
 
-## Configuration
+## Environment variables
 
 | Variable | Default / purpose |
 | --- | --- |
@@ -168,7 +222,7 @@ Start frontend with `cd frontend && npm ci && npm run dev`. Vite reads `frontend
 
 Frontend CSV files are limited to 1 MB and 1000 records. CSV stays in the browser; only validated JSON reaches the API. The frontend maximum is 1000; lowering backend MAX_BATCH may reject a larger frontend batch with a structured validation error.
 
-## Validation and failure policy
+## Validation and error handling
 
 - Required job fields, length bounds, printable text, valid date, nonempty batch and maximum batch size are checked server-side.
 - Unexpected fields, structurally malformed recipient objects, missing keys, oversized strings and invalid job-level input reject the request with 422. Body overflow returns 413.
@@ -178,7 +232,7 @@ Frontend CSV files are limited to 1 MB and 1000 records. CSV stays in the browse
 - Dates may be past or future; there is no undocumented business-date restriction.
 - Reusing an Idempotency-Key with the same normalized request returns the same job; different input returns 409. The frontend retains the key for unchanged retry attempts during the current form session. Refreshing the form resets it.
 
-## API
+## API endpoints
 
 All job/certificate routes are under `/api/v1`. Full field schemas and status codes are available in OpenAPI.
 
@@ -236,11 +290,21 @@ RECIPIENT_ID='paste-returned-recipient-uuid'
 curl "http://localhost:8000/api/v1/recipients/$RECIPIENT_ID/certificate" -o certificate.pdf
 ```
 
+### What each request does
+
+1. `POST /api/v1/jobs` validates the batch and accepts it using the required `Idempotency-Key`.
+2. `GET /api/v1/jobs/{id}` returns status, progress, counts, and timestamps.
+3. `GET /api/v1/jobs/{id}/recipients` lists recipients and their processing outcomes.
+4. `GET /api/v1/recipients/{id}/certificate` downloads one successful recipient's PDF.
+5. `GET /api/v1/jobs/{id}/download` downloads a ZIP of successful PDFs once the job is terminal and has at least one success.
+
+You can also exercise these flows through the frontend: create a batch manually or import a CSV, inspect the job details and recipient statuses, preview generated certificates, and download the results.
+
 Creation response includes all job fields plus `status: queued`, `total: 2`, `pending: 2`, `processing: 0`, `succeeded: 0`, `failed: 0`, `progress: 0`. After successful processing those become `completed`, `2`, `0`, `0`, `2`, `0`, `100` respectively. Timestamps are Unix seconds, with null start/completion until available.
 
 Recipient response is `{items: [...], total: 2, page: 1, page_size: 50}`. Each item includes `id`, `job_id`, `name`, `email`, `status`, `certificate_id`, `error_code`, `error`, `attempts`. Storage paths are never returned.
 
-## Tests and verification
+## Tests
 
 ```bash
 cd backend
@@ -275,20 +339,40 @@ python -m playwright install chromium
 python scripts/browser_smoke.py
 ```
 
-See `VERIFICATION.md` for exact executed checks, actual results and environment limitations. Browser automation was not verified here because browser downloads were blocked. Docker, PostgreSQL and Redis executables were unavailable, so Compose and Celery broker transport were not run here.
+I recorded the checks that were actually run, their results, and the environment limitations in [`VERIFICATION.md`](VERIFICATION.md). Browser automation could not be verified because browser downloads were blocked. Docker, PostgreSQL, and Redis were unavailable in that environment, so the Compose setup and Celery broker transport have not been tested there.
 
-## Demo for a technical review
+## Screenshots
+
+Screenshots will make it easier to see the app without running it. Capture them from the running application and save them in `docs/screenshots/`. Use made-up names and email addresses, and make sure no private data or credentials are visible. Suggested filenames:
+
+- `docs/screenshots/dashboard.png` — dashboard and recent jobs
+- `docs/screenshots/create-batch.png` — batch creation form and CSV/import preview
+- `docs/screenshots/job-details.png` — completed job with recipient statuses
+- `docs/screenshots/certificate-preview.png` — generated certificate preview
+
+After capturing the screenshots, uncomment or add the matching Markdown image links, for example:
+
+```markdown
+![Dashboard](docs/screenshots/dashboard.png)
+![Create batch](docs/screenshots/create-batch.png)
+![Job details](docs/screenshots/job-details.png)
+![Certificate preview](docs/screenshots/certificate-preview.png)
+```
+
+The image links are examples for now; the screenshots themselves still need to be captured from the actual app.
+
+## A quick walkthrough
 
 1. Open Dashboard; observe real empty metrics on a fresh database.
 2. Open Certificate design to review the actual landscape PDF.
-3. Create batch, fill course/organization fields, add two recipients or import the sample CSV. Importing into a fresh form replaces the blank starter row automatically; importing after you have entered rows appends to them.
+3. Create batch, fill course/organization fields, add two recipients or import the sample CSV. Remove the initial empty row when importing.
 4. Demonstrate invalid email and duplicate-email validation, then correct the row.
 5. Review batch and confirm. The job page displays durable acceptance and actual progress.
 6. Filter succeeded recipients; preview and download one PDF; download ZIP.
 7. Refresh the job page, then use history search to revisit the same persistent results.
 8. Run backend partial-failure test to demonstrate one forced generation error does not stop another recipient.
 
-## Storage, security and operations
+## Storage and security notes
 
 Files live outside frontend assets, under configurable storage. Keys and download filenames are UUID-based, never recipient-supplied paths. Temporary PDF/ZIP files are cleaned on normal exit. A hard kill may leave `.tmp` files; operators can remove old temporary files while workers are stopped. Terminal ZIPs are cached because no manual retry changes terminal results.
 
@@ -298,7 +382,7 @@ No authentication or tenant authorization is implemented. Resource checks valida
 
 The bundled font license is in `backend/app/assets/FONT-LICENSE.txt`. Logs avoid recipient names/emails; error responses do not expose paths or stack traces. No paid API is required.
 
-## Known limitations and sensible next steps
+## Current limitations and possible improvements
 
 - PostgreSQL/Redis/Celery transport and Compose need execution on a machine with those services.
 - Browser end-to-end and full visual/responsive accessibility audits remain unverified here; RTL covers labels and dialog behavior, not full WCAG compliance.
