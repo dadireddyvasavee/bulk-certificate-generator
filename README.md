@@ -74,7 +74,7 @@ frontend/src/services/api.ts typed API and real download requests
 frontend/src/components/ui.tsx reusable UI and accessible Radix dialog
 frontend/src/test/           frontend behavior tests
 scripts/smoke.py             live API -> separate worker -> PDF/ZIP verification
-scripts/browser\_smoke.py     optional real browser workflow
+scripts/browser\\\_smoke.py     optional real browser workflow
 examples/batch.json          executable two-recipient request
 README.md, VERIFICATION.md, PLAN.md
 ```
@@ -89,12 +89,12 @@ You will need three terminal windows: one for the API, one for the background wo
 
 ```powershell
 python -m venv .venv
-.\\.venv\\Scripts\\Activate.ps1
+.\\\\.venv\\\\Scripts\\\\Activate.ps1
 python -m pip install -r backend/requirements.txt
 Set-Location backend
-$env:WORKER\_MODE = "local"
-$env:DATABASE\_URL = "sqlite:///./certificates.db"
-$env:STORAGE\_DIR = "./storage"
+$env:WORKER\\\_MODE = "local"
+$env:DATABASE\\\_URL = "sqlite:///./certificates.db"
+$env:STORAGE\\\_DIR = "./storage"
 python -m alembic upgrade head
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
@@ -102,11 +102,11 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 **Terminal 2 — worker** (open a new PowerShell window, then from the project root):
 
 ```powershell
-.\\.venv\\Scripts\\Activate.ps1
+.\\\\.venv\\\\Scripts\\\\Activate.ps1
 Set-Location backend
-$env:WORKER\_MODE = "local"
-$env:DATABASE\_URL = "sqlite:///./certificates.db"
-$env:STORAGE\_DIR = "./storage"
+$env:WORKER\\\_MODE = "local"
+$env:DATABASE\\\_URL = "sqlite:///./certificates.db"
+$env:STORAGE\\\_DIR = "./storage"
 python -m app.worker
 ```
 
@@ -118,7 +118,7 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:5173`. If the frontend cannot reach the API, create `frontend/.env.local` containing `VITE\_API\_URL=http://127.0.0.1:8000`, then restart the Vite dev server. API docs are at `http://127.0.0.1:8000/docs`. The virtual environment is created at the project root, so activate it from that root before changing into `backend`.
+Open `http://localhost:5173`. If the frontend cannot reach the API, create `frontend/.env.local` containing `VITE\\\_API\\\_URL=http://127.0.0.1:8000`, then restart the Vite dev server. API docs are at `http://127.0.0.1:8000/docs`. The virtual environment is created at the project root, so activate it from that root before changing into `backend`.
 
 ### macOS / Linux
 
@@ -131,9 +131,9 @@ python -m venv .venv
 . .venv/bin/activate
 python -m pip install -r backend/requirements.txt
 cd backend
-export WORKER\_MODE=local
-export DATABASE\_URL=sqlite:///./certificates.db
-export STORAGE\_DIR=./storage
+export WORKER\\\_MODE=local
+export DATABASE\\\_URL=sqlite:///./certificates.db
+export STORAGE\\\_DIR=./storage
 python -m alembic upgrade head
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
@@ -143,9 +143,9 @@ Terminal 2, from project root, same environment/database/storage:
 ```bash
 . .venv/bin/activate
 cd backend
-export WORKER\_MODE=local
-export DATABASE\_URL=sqlite:///./certificates.db
-export STORAGE\_DIR=./storage
+export WORKER\\\_MODE=local
+export DATABASE\\\_URL=sqlite:///./certificates.db
+export STORAGE\\\_DIR=./storage
 python -m app.worker
 ```
 
@@ -165,7 +165,7 @@ The API does not automatically create tables: migrations are mandatory. The loca
 
 ```bash
 cp .env.example .env
-# Edit POSTGRES\_PASSWORD and matching DATABASE\_URL for your local environment.
+# Edit POSTGRES\\\_PASSWORD and matching DATABASE\\\_URL for your local environment.
 docker compose up --build
 ```
 
@@ -183,7 +183,7 @@ Named volumes preserve database, broker data and certificates across `down`/`up`
 
 ```bash
 cp .env.example .env
-# Use a URL-safe local password in .env. Percent-encode special characters in DATABASE\_URL.
+# Use a URL-safe local password in .env. Percent-encode special characters in DATABASE\\\_URL.
 docker compose up -d postgres redis
 . .venv/bin/activate
 set -a; . ./.env; set +a
@@ -204,7 +204,7 @@ cd backend
 python -m celery -A app.worker.celery beat --loglevel=info --schedule=/tmp/celerybeat-schedule
 ```
 
-Start frontend with `cd frontend \&\& npm ci \&\& npm run dev`. Vite reads `frontend/.env.local` if you create it; set `VITE\_API\_URL` there for a non-default API. Backend configuration uses exported environment variables; it does not silently load `.env` files.
+Start frontend with `cd frontend \\\&\\\& npm ci \\\&\\\& npm run dev`. Vite reads `frontend/.env.local` if you create it; set `VITE\\\_API\\\_URL` there for a non-default API. Backend configuration uses exported environment variables; it does not silently load `.env` files.
 
 ## Environment variables
 
@@ -226,7 +226,7 @@ Frontend CSV files are limited to 1 MB and 1000 records. CSV stays in the browse
 
 * Required job fields, length bounds, printable text, valid date, nonempty batch and maximum batch size are checked server-side.
 * Unexpected fields, structurally malformed recipient objects, missing keys, oversized strings and invalid job-level input reject the request with 422. Body overflow returns 413.
-* Structurally valid recipient objects with empty names, invalid emails or duplicate case-insensitive email addresses are persisted as `failed / INVALID\_RECIPIENT`; valid recipients continue. The first valid occurrence of an email wins. Duplicates are scoped to one batch, not across jobs.
+* Structurally valid recipient objects with empty names, invalid emails or duplicate case-insensitive email addresses are persisted as `failed / INVALID\\\_RECIPIENT`; valid recipients continue. The first valid occurrence of an email wins. Duplicates are scoped to one batch, not across jobs.
 * Browser validation is stricter about submission: every row must be corrected first. Imported invalid rows are visible and editable; none are silently discarded.
 * Rendering uses escaped text and an embedded DejaVu Sans font. Unsupported glyphs fail the affected recipient rather than producing an unreadable certificate. Complex-script shaping and full multilingual support are out of scope.
 * Dates may be past or future; there is no undocumented business-date restriction.
@@ -241,7 +241,7 @@ All job/certificate routes are under `/api/v1`. Full field schemas and status co
 |GET|`/health`|Process liveness|
 |GET|`/ready`|Database/schema and broker readiness|
 |POST|`/api/v1/jobs`|Durable acceptance, 201; required Idempotency-Key|
-|GET|`/api/v1/jobs`|`page`, `page\_size`, `search`, optional job `status`|
+|GET|`/api/v1/jobs`|`page`, `page\\\_size`, `search`, optional job `status`|
 |GET|`/api/v1/jobs/{id}`|Job metadata and derived counts/progress|
 |GET|`/api/v1/jobs/{id}/recipients`|Pagination and recipient status filter|
 |GET|`/api/v1/metrics`|Actual persisted aggregate metrics|
@@ -262,8 +262,8 @@ Unknown valid UUIDs return 404; malformed UUIDs return 422. Missing PDFs return 
   "title": "Certificate of Achievement",
   "statement": "For successfully completing the course",
   "signatory": "Course Director",
-  "issue\_date": "2026-10-09",
-  "recipients": \[
+  "issue\\\_date": "2026-10-09",
+  "recipients": \\\[
     {"name": "Alex Rivera", "email": "alex@example.com"},
     {"name": "Sam Taylor", "email": "sam@example.com"}
   ]
@@ -273,21 +273,21 @@ Unknown valid UUIDs return 404; malformed UUIDs return 422. Missing PDFs return 
 From project root:
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/jobs \\
-  -H 'Content-Type: application/json' \\
-  -H 'Idempotency-Key: technical-review-batch-1' \\
+curl -X POST http://localhost:8000/api/v1/jobs \\\\
+  -H 'Content-Type: application/json' \\\\
+  -H 'Idempotency-Key: technical-review-batch-1' \\\\
   --data-binary @examples/batch.json
 ```
 
 Copy the returned `id` into JOB\_ID, then:
 
 ```bash
-JOB\_ID='paste-returned-job-uuid'
-curl "http://localhost:8000/api/v1/jobs/$JOB\_ID"
-curl "http://localhost:8000/api/v1/jobs/$JOB\_ID/recipients?status=succeeded\&page=1\&page\_size=50"
-curl "http://localhost:8000/api/v1/jobs/$JOB\_ID/download" -o certificates.zip
-RECIPIENT\_ID='paste-returned-recipient-uuid'
-curl "http://localhost:8000/api/v1/recipients/$RECIPIENT\_ID/certificate" -o certificate.pdf
+JOB\\\_ID='paste-returned-job-uuid'
+curl "http://localhost:8000/api/v1/jobs/$JOB\\\_ID"
+curl "http://localhost:8000/api/v1/jobs/$JOB\\\_ID/recipients?status=succeeded\\\&page=1\\\&page\\\_size=50"
+curl "http://localhost:8000/api/v1/jobs/$JOB\\\_ID/download" -o certificates.zip
+RECIPIENT\\\_ID='paste-returned-recipient-uuid'
+curl "http://localhost:8000/api/v1/recipients/$RECIPIENT\\\_ID/certificate" -o certificate.pdf
 ```
 
 ### What each request does
@@ -302,7 +302,7 @@ You can also exercise these flows through the frontend: create a batch manually 
 
 Creation response includes all job fields plus `status: queued`, `total: 2`, `pending: 2`, `processing: 0`, `succeeded: 0`, `failed: 0`, `progress: 0`. After successful processing those become `completed`, `2`, `0`, `0`, `2`, `0`, `100` respectively. Timestamps are Unix seconds, with null start/completion until available.
 
-Recipient response is `{items: \[...], total: 2, page: 1, page\_size: 50}`. Each item includes `id`, `job\_id`, `name`, `email`, `status`, `certificate\_id`, `error\_code`, `error`, `attempts`. Storage paths are never returned.
+Recipient response is `{items: \\\[...], total: 2, page: 1, page\\\_size: 50}`. Each item includes `id`, `job\\\_id`, `name`, `email`, `status`, `certificate\\\_id`, `error\\\_code`, `error`, `attempts`. Storage paths are never returned.
 
 ## Tests
 
@@ -336,7 +336,7 @@ Optional browser test, with frontend also running:
 ```bash
 python -m pip install playwright==1.57.0
 python -m playwright install chromium
-python scripts/browser\_smoke.py
+python scripts/browser\\\_smoke.py
 ```
 
 I recorded the checks that were actually run, their results, and the environment limitations in [`VERIFICATION.md`](VERIFICATION.md). Browser automation could not be verified because browser downloads were blocked. Docker, PostgreSQL, and Redis were unavailable in that environment, so the Compose setup and Celery broker transport have not been tested there.
@@ -358,6 +358,24 @@ Review previous batches, processing status, and generation results.
 **Generated Certificate**
 
 Preview an individual PDF certificate generated by the application.
+
+\## Screenshots
+
+\### Dashboard
+
+!\[Dashboard](docs/screenshots/dashboard.png)
+
+\### Create a Batch
+
+!\[Create Batch](docs/screenshots/create-batch.png)
+
+\### Job History
+
+!\[Job History](docs/screenshots/job-history.png)
+
+\### Generated Certificate
+
+!\[Generated Certificate](docs/screenshots/certificate-preview.png)
 
 
 
