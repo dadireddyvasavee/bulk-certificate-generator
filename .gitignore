@@ -1,0 +1,30 @@
+# Frontend dependencies and build output
+node_modules/
+dist/
+
+# Python virtual environments and cache
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Databases and generated certificates
+*.db
+*.sqlite
+*.sqlite3
+storage/
+
+# Test and coverage output
+.coverage
+htmlcov/
+# Generated verification logs
+verification-logs/
+
+# Generated certificate preview
+examples/certificate-preview.pdf

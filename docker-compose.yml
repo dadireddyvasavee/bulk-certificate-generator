@@ -1,0 +1,71 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: certify
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: certify
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U certify -d certify"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    ports: ["127.0.0.1:6379:6379"]
+    volumes: ["redis_data:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  migrate:
+    build: ./backend
+    environment: &backend_env
+      DATABASE_URL: postgresql+psycopg://certify:${POSTGRES_PASSWORD}@postgres:5432/certify
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_DIR: /storage
+      WORKER_MODE: celery
+      FRONTEND_ORIGIN: http://localhost:5173
+      MAX_BATCH: ${MAX_BATCH:-1000}
+      MAX_BODY_BYTES: ${MAX_BODY_BYTES:-2000000}
+    command: python -m alembic upgrade head
+    depends_on:
+      postgres: {condition: service_healthy}
+  api:
+    build: ./backend
+    environment: *backend_env
+    ports: ["127.0.0.1:8000:8000"]
+    volumes: ["certificate_storage:/storage"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+  worker:
+    build: ./backend
+    environment: *backend_env
+    command: python -m celery -A app.worker.celery worker --concurrency=2 --loglevel=info
+    volumes: ["certificate_storage:/storage"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+  dispatcher:
+    build: ./backend
+    environment: *backend_env
+    command: python -m celery -A app.worker.celery beat --loglevel=info --schedule=/tmp/celerybeat-schedule
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    ports: ["127.0.0.1:5173:80"]
+    depends_on: [api]
+volumes:
+  postgres_data:
+  redis_data:
+  certificate_storage:
